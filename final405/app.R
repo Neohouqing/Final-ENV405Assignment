@@ -7,22 +7,40 @@ library(ggplot2)
 
 wd_to_sector <- function(wd) {
   wd <- wd %% 360
+  
   cuts <- c(0, 45, 90, 135, 180, 225, 270, 315, 360)
   labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+<<<<<<< HEAD
   cut(wd, breaks = cuts, labels = labels, include.lowest = TRUE, right = FALSE)
+=======
+  
+  cut(
+    wd,
+    breaks = cuts,
+    labels = labels,
+    include.lowest = TRUE,
+    right = FALSE
+  )
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
 }
 
 ui <- fluidPage(
   titlePanel("ENV405 wind analysis app"),
+  
   sidebarLayout(
     sidebarPanel(
       fileInput(
         "file_wind",
         "Upload wind CSV file",
-        accept = ".csv"
+        accept = c(".csv")
       ),
+<<<<<<< HEAD
       helpText("If no file is uploaded, the app uses ../data/wind.csv.")
+=======
+      helpText("If no file is uploaded, the app uses wind.csv in the data folder.")
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     ),
+    
     mainPanel(
       plotOutput("wind_rose"),
       plotOutput("direction_bar"),
@@ -45,27 +63,38 @@ server <- function(input, output, session) {
     } else {
       read_csv("../data/wind.csv", show_col_types = FALSE)
     }
+<<<<<<< HEAD
     df %>% mutate(date = ymd_hms(date))
+=======
+    
+    df %>%
+      mutate(date = ymd_hms(date))
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
   })
   
   output$wind_rose <- renderPlot({
     df <- wind()
+<<<<<<< HEAD
     validate(
       need("ws" %in% names(df), "Cannot find column 'ws' in data."),
       need("wd" %in% names(df), "Cannot find column 'wd' in data.")
     )
+=======
+    
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     windRose(
-      mydata = df,
-      ws = "ws",
-      wd = "wd",
-      paddle = TRUE,
+      mydata       = df,
+      ws           = "ws",
+      wd           = "wd",
+      paddle       = TRUE,
       key.position = "right",
-      main = "Wind rose"
+      main         = "Wind rose"
     )
   })
   
   direction_freq <- reactive({
     df <- wind()
+    
     df %>%
       filter(!is.na(wd)) %>%
       mutate(direction_sector = wd_to_sector(wd)) %>%
@@ -84,6 +113,7 @@ server <- function(input, output, session) {
   
   output$direction_bar <- renderPlot({
     df <- direction_freq()
+    
     ggplot(df, aes(x = direction_sector, y = rel_freq_percent)) +
       geom_col() +
       labs(
@@ -96,6 +126,10 @@ server <- function(input, output, session) {
   
   output$ws_time <- renderPlot({
     df <- wind()
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     ggplot(df, aes(x = date, y = ws)) +
       geom_line() +
       labs(
@@ -108,6 +142,10 @@ server <- function(input, output, session) {
   
   output$ws_hist <- renderPlot({
     df <- wind()
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     ggplot(df, aes(x = ws)) +
       geom_histogram(bins = 30) +
       labs(
@@ -120,6 +158,7 @@ server <- function(input, output, session) {
   
   output$wind_stats <- renderTable({
     df <- wind()
+<<<<<<< HEAD
     df %>%
       summarise(
         n = n(),
@@ -128,11 +167,26 @@ server <- function(input, output, session) {
         min_ws = min(ws, na.rm = TRUE),
         max_ws = max(ws, na.rm = TRUE),
         sd_ws = sd(ws, na.rm = TRUE)
+=======
+    
+    df %>%
+      summarise(
+        n         = n(),
+        mean_ws   = mean(ws, na.rm = TRUE),
+        median_ws = median(ws, na.rm = TRUE),
+        min_ws    = min(ws, na.rm = TRUE),
+        max_ws    = max(ws, na.rm = TRUE),
+        sd_ws     = sd(ws, na.rm = TRUE)
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
       )
   }, digits = 2)
   
   footprint_points <- reactive({
     df <- wind()
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     df %>%
       filter(!is.na(ws), !is.na(wd)) %>%
       mutate(
@@ -143,6 +197,10 @@ server <- function(input, output, session) {
   
   output$footprint_plot <- renderPlot({
     df <- footprint_points()
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 2b5f6b2 (Fix default wind.csv path and correct data import bug in wind analysis app)
     ggplot(df, aes(x = x, y = y)) +
       stat_density_2d_filled() +
       labs(
@@ -156,3 +214,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
