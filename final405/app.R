@@ -28,7 +28,21 @@ ui <- fluidPage(
         "Upload wind CSV file",
         accept = ".csv"
       ),
-      helpText("If no file is uploaded, the app uses ../data/wind.csv.")
+      helpText("If no file is uploaded, the app uses ../data/wind.csv."),
+      sliderInput(
+        "ws_range",
+        "Wind speed range (m/s)",
+        min = 0,
+        max = 20,
+        value = c(0, 20),
+        step = 0.5
+      ),
+      selectInput(
+        "sector_filter",
+        "Filter by wind sector",
+        choices = c("All", "N", "NE", "E", "SE", "S", "SW", "W", "NW"),
+        selected = "All"
+      )
     ),
     
     mainPanel(
@@ -58,8 +72,25 @@ server <- function(input, output, session) {
       mutate(date = ymd_hms(date))
   })
   
-  output$wind_rose <- renderPlot({
+  filtered_wind <- reactive({
     df <- wind()
+    
+    df <- df %>%
+      filter(!is.na(ws)) %>%
+      filter(ws >= input$ws_range[1], ws <= input$ws_range[2])
+    
+    if (input$sector_filter != "All") {
+      df <- df %>%
+        filter(!is.na(wd)) %>%
+        mutate(direction_sector = wd_to_sector(wd)) %>%
+        filter(direction_sector == input$sector_filter)
+    }
+    
+    df
+  })
+  
+  output$wind_rose <- renderPlot({
+    df <- filtered_wind()
     
     validate(
       need("ws" %in% names(df), "Cannot find column 'ws' in data."),
@@ -77,16 +108,16 @@ server <- function(input, output, session) {
   })
   
   direction_freq <- reactive({
-    df <- wind()
+    df <- filtered_wind()
     
     df %>%
       filter(!is.na(wd)) %>%
       mutate(direction_sector = wd_to_sector(wd)) %>%
       count(direction_sector, name = "count") %>%
       mutate(
-        total             = sum(count),
-        rel_freq          = count / total,
-        rel_freq_percent  = round(rel_freq * 100, 1)
+        total            = sum(count),
+        rel_freq         = count / total,
+        rel_freq_percent = round(rel_freq * 100, 1)
       ) %>%
       arrange(direction_sector)
   })
@@ -109,7 +140,7 @@ server <- function(input, output, session) {
   })
   
   output$ws_time <- renderPlot({
-    df <- wind()
+    df <- filtered_wind()
     
     ggplot(df, aes(x = date, y = ws)) +
       geom_line() +
@@ -122,7 +153,7 @@ server <- function(input, output, session) {
   })
   
   output$ws_hist <- renderPlot({
-    df <- wind()
+    df <- filtered_wind()
     
     ggplot(df, aes(x = ws)) +
       geom_histogram(bins = 30) +
@@ -135,7 +166,7 @@ server <- function(input, output, session) {
   })
   
   output$wind_stats <- renderTable({
-    df <- wind()
+    df <- filtered_wind()
     
     df %>%
       summarise(
@@ -149,7 +180,7 @@ server <- function(input, output, session) {
   }, digits = 2)
   
   footprint_points <- reactive({
-    df <- wind()
+    df <- filtered_wind()
     
     df %>%
       filter(!is.na(ws), !is.na(wd)) %>%
