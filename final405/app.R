@@ -46,7 +46,9 @@ ui <- fluidPage(
       h4("Wind direction frequency table"),
       tableOutput("direction_table"),
       h4("Wind speed summary"),
-      tableOutput("wind_stats")
+      tableOutput("wind_stats"),
+      h4("Download filtered data"),
+      downloadButton("download_filtered", "Download CSV")
     )
   )
 )
@@ -63,27 +65,26 @@ server <- function(input, output, session) {
   
   filtered_wind <- reactive({
     df <- wind()
-    
-    validate(
-      need("ws" %in% names(df), "Cannot find column 'ws' in data."),
-      need("wd" %in% names(df), "Cannot find column 'wd' in data.")
-    )
-    
+    ws_min <- input$ws_range[1]
+    ws_max <- input$ws_range[2]
+    sector <- input$sector_filter
     df <- df %>%
       filter(!is.na(ws), !is.na(wd)) %>%
-      filter(ws >= input$ws_range[1], ws <= input$ws_range[2])
-    
-    if (!is.null(input$sector_filter) && input$sector_filter != "All") {
+      filter(ws >= ws_min, ws <= ws_max)
+    if (!is.null(sector) && sector != "All") {
       df <- df %>%
         mutate(direction_sector = wd_to_sector(wd)) %>%
-        filter(direction_sector == input$sector_filter)
+        filter(direction_sector == sector)
     }
-    
     df
   })
   
   output$wind_rose <- renderPlot({
     df <- filtered_wind()
+    validate(
+      need("ws" %in% names(df), "Cannot find column 'ws' in data."),
+      need("wd" %in% names(df), "Cannot find column 'wd' in data.")
+    )
     windRose(
       mydata = df,
       ws = "ws",
@@ -181,6 +182,16 @@ server <- function(input, output, session) {
       coord_equal() +
       theme_minimal()
   })
+  
+  output$download_filtered <- downloadHandler(
+    filename = function() {
+      paste0("filtered_wind_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
+    },
+    content = function(file) {
+      df <- filtered_wind()
+      write_csv(df, file)
+    }
+  )
 }
 
 shinyApp(ui = ui, server = server)
