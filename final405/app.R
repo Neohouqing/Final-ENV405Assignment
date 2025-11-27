@@ -35,6 +35,11 @@ ui <- fluidPage(
         "Filter by wind sector",
         choices = c("All", "N", "NE", "E", "SE", "S", "SW", "W", "NW"),
         selected = "All"
+      ),
+      checkboxInput(
+        "show_points",
+        "Show points on wind speed time series",
+        value = TRUE
       )
     ),
     mainPanel(
@@ -48,7 +53,9 @@ ui <- fluidPage(
       h4("Wind speed summary"),
       tableOutput("wind_stats"),
       h4("Download filtered data"),
-      downloadButton("download_filtered", "Download CSV")
+      downloadButton("download_filtered", "Download CSV"),
+      h4("Current filters"),
+      verbatimTextOutput("filter_summary")
     )
   )
 )
@@ -68,14 +75,17 @@ server <- function(input, output, session) {
     ws_min <- input$ws_range[1]
     ws_max <- input$ws_range[2]
     sector <- input$sector_filter
+    
     df <- df %>%
       filter(!is.na(ws), !is.na(wd)) %>%
       filter(ws >= ws_min, ws <= ws_max)
+    
     if (!is.null(sector) && sector != "All") {
       df <- df %>%
         mutate(direction_sector = wd_to_sector(wd)) %>%
         filter(direction_sector == sector)
     }
+    
     df
   })
   
@@ -83,7 +93,8 @@ server <- function(input, output, session) {
     df <- filtered_wind()
     validate(
       need("ws" %in% names(df), "Cannot find column 'ws' in data."),
-      need("wd" %in% names(df), "Cannot find column 'wd' in data.")
+      need("wd" %in% names(df), "Cannot find column 'wd' in data."),
+      need(nrow(df) > 0, "No data after filtering.")
     )
     windRose(
       mydata = df,
@@ -97,6 +108,8 @@ server <- function(input, output, session) {
   
   direction_freq <- reactive({
     df <- filtered_wind()
+    req(nrow(df) > 0)
+    
     df %>%
       mutate(direction_sector = wd_to_sector(wd)) %>%
       count(direction_sector, name = "count") %>%
@@ -126,7 +139,9 @@ server <- function(input, output, session) {
   
   output$ws_time <- renderPlot({
     df <- filtered_wind()
-    ggplot(df, aes(x = date, y = ws)) +
+    req(nrow(df) > 0)
+    
+    p <- ggplot(df, aes(x = date, y = ws)) +
       geom_line() +
       labs(
         title = "Wind speed time series",
@@ -134,10 +149,18 @@ server <- function(input, output, session) {
         y = "Wind speed"
       ) +
       theme_minimal()
+    
+    if (isTRUE(input$show_points)) {
+      p <- p + geom_point(alpha = 0.3, size = 0.4)
+    }
+    
+    p
   })
   
   output$ws_hist <- renderPlot({
     df <- filtered_wind()
+    req(nrow(df) > 0)
+    
     ggplot(df, aes(x = ws)) +
       geom_histogram(bins = 30) +
       labs(
@@ -150,6 +173,8 @@ server <- function(input, output, session) {
   
   output$wind_stats <- renderTable({
     df <- filtered_wind()
+    req(nrow(df) > 0)
+    
     df %>%
       summarise(
         n = n(),
@@ -163,6 +188,8 @@ server <- function(input, output, session) {
   
   footprint_points <- reactive({
     df <- filtered_wind()
+    req(nrow(df) > 0)
+    
     df %>%
       mutate(
         x = ws * sin(wd * pi / 180),
@@ -192,6 +219,15 @@ server <- function(input, output, session) {
       write_csv(df, file)
     }
   )
+  
+  output$filter_summary <- renderText({
+    df <- filtered_wind()
+    paste0(
+      "Rows after filtering: ", nrow(df),
+      " | WS range: ", input$ws_range[1], "–", input$ws_range[2], " m/s",
+      " | Sector: ", input$sector_filter
+    )
+  })
 }
 
 shinyApp(ui = ui, server = server)
