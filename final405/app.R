@@ -43,6 +43,12 @@ ui <- fluidPage(
         "Show points on wind speed time series",
         value = TRUE
       ),
+      radioButtons(
+        "trend_model",
+        "Trend model",
+        choices = c("Linear", "Loess"),
+        selected = "Linear"
+      ),
       downloadButton("download_filtered", "Download CSV"),
       h4("Statistical test: mean ws by sector"),
       selectInput(
@@ -67,7 +73,7 @@ ui <- fluidPage(
       plotOutput("ws_time"),
       h3("Wind speed distribution"),
       plotOutput("ws_hist"),
-      h3("Wind statistics"),
+      h3("Wind speed statistics"),
       tableOutput("wind_stats"),
       h3("Footprint-style plot"),
       plotOutput("footprint_plot"),
@@ -77,7 +83,10 @@ ui <- fluidPage(
       textOutput("filter_summary"),
       h3("Sector means and t-test"),
       tableOutput("sector_means"),
-      verbatimTextOutput("ttest_result")
+      verbatimTextOutput("ttest_result"),
+      h3("Trend analysis of wind speed"),
+      plotOutput("ws_trend"),
+      tableOutput("trend_summary")
     )
   )
 )
@@ -121,6 +130,23 @@ server <- function(input, output, session) {
         x = ws * sin(wd * pi / 180),
         y = ws * cos(wd * pi / 180)
       )
+  })
+  
+  sector_stats <- reactive({
+    filtered_wind() %>%
+      group_by(direction_sector) %>%
+      summarise(
+        n = n(),
+        mean_ws = mean(ws, na.rm = TRUE),
+        sd_ws = sd(ws, na.rm = TRUE),
+        .groups = "drop"
+      )
+  })
+  
+  trend_data <- reactive({
+    filtered_wind() %>%
+      arrange(date) %>%
+      mutate(time_numeric = as.numeric(date))
   })
   
   output$wind_rose <- renderPlot({
@@ -233,13 +259,7 @@ server <- function(input, output, session) {
   })
   
   output$sector_means <- renderTable({
-    filtered_wind() %>%
-      group_by(direction_sector) %>%
-      summarise(
-        n = n(),
-        mean_ws = mean(ws, na.rm = TRUE),
-        .groups = "drop"
-      )
+    sector_stats()
   }, digits = 2)
   
   output$ttest_result <- renderPrint({
@@ -252,6 +272,65 @@ server <- function(input, output, session) {
       t.test(a, b, var.equal = FALSE)
     }
   })
+  
+  output$ws_trend <- renderPlot({
+    df <- trend_data()
+    if (nrow(df) < 3) {
+      plot.new()
+      text(0.5, 0.5, "Not enough data for trend analysis")
+    } else {
+      if (input$trend_model == "Linear") {
+        ggplot(df, aes(x = date, y = ws)) +
+          geom_point(alpha = 0.4, size = 0.6) +
+          geom_smooth(method = "lm", se = TRUE) +
+          labs(
+            title = "Linear trend of wind speed",
+            x = "Time",
+            y = "Wind speed"
+          ) +
+          theme_minimal() +
+          axis_y_flat
+      } else {
+        ggplot(df, aes(x = date, y = ws)) +
+          geom_point(alpha = 0.4, size = 0.6) +
+          geom_smooth(method = "loess", se = TRUE) +
+          labs(
+            title = "Loess smooth of wind speed",
+            x = "Time",
+            y = "Wind speed"
+          ) +
+          theme_minimal() +
+          axis_y_flat
+      }
+    }
+  })
+  
+  output$trend_summary <- renderTable({
+    df <- trend_data()
+    if (nrow(df) < 3) {
+      return(data.frame(message = "Not enough data for trend analysis."))
+    }
+    if (input$trend_model == "Linear") {
+      fit <- lm(ws ~ time_numeric, data = df)
+      sm <- summary(fit)
+      slope <- coef(sm)[2, "Estimate"]
+      p_value <- coef(sm)[2, "Pr(>|t|)"]
+      r2 <- sm$r.squared
+      n <- nobs(fit)
+      data.frame(
+        model = "Linear",
+        slope = round(slope, 6),
+        p_value = signif(p_value, 3),
+        r_squared = round(r2, 3),
+        n = n
+      )
+    } else {
+      data.frame(
+        model = "Loess",
+        note = "Non-parametric smooth; no single slope estimate."
+      )
+    }
+  }, digits = 4, rownames = FALSE)
 }
 
 shinyApp(ui = ui, server = server)
