@@ -137,7 +137,7 @@ Figure 1 shows the full Shiny app interface and the default settings. The left s
 
 The directional structure of the wind field is summarised by the wind rose (Figure 2) and the wind direction frequency bar plot (Figure 3) under the default settings (wind speed 0–20 m/s, all sectors). The wind rose shows that the most frequent sectors are South (S) and South–West (SW), followed by West (W), while North (N) and North–East (NE) occur less often. This pattern is quantified in the frequency table (Table 2): the relative frequency is about 24.40% for S, 18.40% for SW and 14.90% for W, but only 12.20% and 6.80% for N and NE. This indicates that the site is dominated by southerly and south–westerly winds during the observation period, while northerly winds are comparatively rare. Figure 3 visualises the percentages in Table 2 as bars, making the contrast between the tall bars for S and SW and the shorter bars for NE and NW very clear. This is useful in teaching when we want students to quickly identify the dominant wind directions.
 
-![Figure 2. Wind rose for the full dataset, summarising the joint distribution of wind speed and wind direction sectors; bar length indicates frequency and colour indicates wind speed classes.](fig/Figure%202.png){fig-align="center"}
+![Figure 2. Wind rose for the full dataset, summarising the joint distribution of wind speed and wind direction sectors; bar length indicates frequency and colour indicates wind speed classes.](fig/Figure_2.png){fig-align="center"}
 
 **Table 1 Wind speed statistics**
 
