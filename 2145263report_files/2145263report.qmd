@@ -1,0 +1,214 @@
+---
+title: "Final405report"
+author: "2145263"
+format: html
+editor: visual
+bibliography: references.bib
+---
+
+## 
+
+# Introduction
+
+Near-surface wind plays a central role in controlling the transport of air pollutants, heat and moisture in the lower atmosphere. At many environmental monitoring sites, wind is recorded as long time series of speed and direction, which are difficult to interpret without appropriate statistical tools and visualisation. Wind rose diagrams have therefore become a standard way to summarise the joint distribution of wind speed and direction at a given location, and are widely used to identify prevailing wind sectors and their frequencies [@windros].
+
+Beyond overall frequency patterns, spatial and temporal variations in wind are also important for understanding surface–atmosphere exchanges. Flux footprint theory links eddy-covariance measurements at a tower to the upwind source area and shows that the origin of measured fluxes depends strongly on the wind field and atmospheric stability [@footprin]. A clear statistical description of wind regimes is therefore a prerequisite for interpreting environmental signals and evaluating how representative a site is for a heterogeneous landscape.
+
+Recent advances in R-based tools make it possible to embed such statistical analyses in interactive web applications. The **openair** package provides a set of functions for analysing atmospheric and air-quality data in R, including wind roses and related directional plots [@carslaw2012]. The **Shiny** framework turns R analyses into interactive web apps, where users can explore data through inputs such as file upload, selectors and sliders instead of fixed scripts [@chang2025]. This combination is particularly attractive for environmental science, because it couples reproducible statistical methods with flexible, user-driven exploration of monitoring data.
+
+In this study, I develop an R Shiny application for the statistical analysis of a wind dataset containing time-stamped measurements of wind speed and direction. The app focuses on three related questions: (i) how often the wind blows from different sectors and at what speeds; (ii) how wind speed and direction vary over time; and (iii) whether simple statistical comparisons or trend models reveal systematic differences between wind sectors or temporal periods. To address these questions, the app integrates wind-rose visualisation, direction-frequency tables, wind-speed distributions and summary statistics, sector-wise hypothesis tests, and simple time-series trend models within a single interface. The goal is to provide a compact but extensible framework for exploring wind-related environmental data, and to demonstrate how Shiny can be used to bring statistical analysis and visualisation together in a transparent, reproducible way.
+
+## Methods
+
+### Shiny App
+
+#### App name and purpose
+
+The application developed in this project is called **“ENV405 wind analysis app”**. Its goal is to provide an interactive environment for statistical analysis and visualization of hourly wind speed (`ws`) and wind direction (`wd`) data. Through a web-based interface, users can upload a CSV file or use the default `wind.csv` dataset, set wind-speed and wind-direction filters, and interactively explore wind roses, direction frequency distributions, wind-speed time series, wind-speed histograms, a footprint-style density plot, and grouped statistical tests.
+
+#### Development environment and dependencies
+
+The app was developed in R 4.x using a single `app.R` file. The main R packages are:
+
+-   `shiny` for the web application framework\
+-   `readr` for reading CSV files\
+-   `dplyr` for data manipulation\
+-   `lubridate` for parsing time stamps\
+-   `openair` for wind-rose and air-quality style plots\
+-   `ggplot2` for custom graphics\
+-   base R `stats` for t-tests and basic statistical methods
+
+As long as `app.R` and `wind.csv` are placed in the same working directory, the app can be run on different computers with the same package set.
+
+#### Data import and preprocessing
+
+On the server side a reactive object `wind()` controls data import. The logic is:
+
+-   If the user uploads a CSV file via `fileInput("file_wind")`, the app reads it with\
+    `read_csv(input$file_wind$datapath, show_col_types = FALSE)`.\
+-   Otherwise the app reads the local `wind.csv` file in the working directory.
+
+After reading, the app converts the `date` column to POSIXct using\
+`mutate(date = ymd_hms(date))`, which is required for time-series plots.\
+Wind direction in degrees (0–360) is mapped to eight sectors (N, NE, E, SE, S, SW, W, NW) by a helper function `wd_to_sector()`, which uses `cut()` to assign sector labels that are reused in later summaries and plots.
+
+#### User interface and controls
+
+The user interface is built with `fluidPage()` and `sidebarLayout()`:
+
+-   The **sidebar panel** contains the interactive controls:
+    -   `fileInput` to upload an external wind dataset\
+    -   `sliderInput("ws_range")` to choose the range of wind speed to keep\
+    -   `selectInput("sector_filter")` to select “All” or a single wind sector\
+    -   `checkboxInput("show_points")` to toggle points on top of the wind-speed time series
+-   The **main panel** contains:
+    -   multiple `plotOutput` elements for the wind rose, direction frequency bar plot, wind-speed time series, wind-speed histogram, and footprint-style density plot\
+    -   `tableOutput` elements for the wind-direction frequency table and the wind-speed summary statistics\
+    -   text outputs for a filter summary and the statistical test results
+
+#### Core reactive structure and filtering
+
+To keep the logic consistent across all outputs, the app defines a central reactive object `filtered_wind()`:
+
+1.  It starts from the data returned by `wind()`.\
+2.  It filters observations according to the wind-speed range selected in `ws_range` and, if specified, the wind-direction sector chosen in `sector_filter`.\
+3.  It returns the filtered data frame.
+
+All plots and tables (wind rose, direction frequency, time series, histogram, footprint density, and summary tables) are computed from `filtered_wind()`. This guarantees that all outputs reflect exactly the same filtering choices.
+
+#### Statistical analysis module
+
+For descriptive analysis, the app uses `summarise()` on `filtered_wind()` to compute basic wind-speed statistics: sample size, mean, median, minimum, maximum, and standard deviation. The results are displayed as the “Wind speed summary” table.
+
+In addition, the app implements a two-sample t-test to compare mean wind speed between two wind sectors:
+
+-   The user selects **Group A sector** and **Group B sector** from two drop-down menus.\
+-   The server extracts the corresponding subsets of `filtered_wind()`, constructs a two-level factor for sector, and calls `t.test()` to test for a difference in mean `ws`.\
+-   The output shows sample sizes, mean wind speeds, the difference in means, the t statistic, and the p-value in text form, so that these results can be discussed later in the Quarto report.
+
+#### Visual outputs
+
+The visualization components are:
+
+-   `openair::windRose()` to display the joint distribution of wind speed and direction.\
+-   `ggplot2` bar plots for relative frequency of wind sectors, line (and optional point) plots for the wind-speed time series, and histograms for the wind-speed distribution.\
+-   A footprint-style density map where wind speed and direction are converted to Cartesian coordinates\
+    `x = ws * sin(wd * pi / 180)` and `y = ws * cos(wd * pi / 180)`\
+    and visualized with `stat_density_2d_filled()`.
+
+Axis titles are set horizontally and consistently across all figures to improve readability and layout.
+
+#### Data export
+
+The app includes a `downloadHandler` that lets users export the currently filtered dataset:
+
+-   The file name includes a timestamp, for example `"filtered_wind_YYYYmmdd_HHMMSS.csv"`.\
+-   The exported file is exactly the data returned by `filtered_wind()`.
+
+This makes the app not only an exploration tool but also a generator of reusable filtered datasets for further analysis.
+
+#### Use of AI assistance and validation
+
+In this study we used **ChatGPT as assistance** to help design the overall Shiny structure, refine and simplify R code, design the filtering and statistical modules, and understand specific functions from `openair` and `ggplot2`.
+
+Every AI-suggested code block was run step-by-step in RStudio and checked manually:
+
+-   Direction frequencies from `direction_freq()` were compared to raw counts from the data.\
+-   t-test results were verified by running `t.test()` directly on subsets of the data in the console.\
+-   The same `app.R` and `wind.csv` were tested on another computer to confirm reproducibility.
+
+Only code that produced correct, interpretable results and matched the course requirements was kept and committed to GitHub. AI served purely as a coding and explanation assistant; all statistical decisions and validations were made by the author.
+
+### Data
+
+The wind dataset used in this project is the teaching dataset **`wind.csv`** provided by the ENV405 instructor. It was distributed through the course Box folder, and all students downloaded the same file. Each row represents one hourly observation at a monitoring site, and the main variables are:
+
+-   `date`: observation time (as a character string, later parsed to POSIXct in the app)\
+-   `ws`: wind speed in m/s\
+-   `wd`: wind direction in degrees (0–360)
+
+In the Shiny app, this `wind.csv` file is the default data source. If the user does not upload a new file, the app reads `wind.csv`, parses the time stamps, and assigns wind sectors. If the user uploads a custom dataset with the same structure, the same preprocessing steps are applied. This design ensures that the analysis in the report is based on a shared course dataset while still allowing the app to be reused with other wind datasets.!
+
+## Results and Discussions
+
+Figure 1 shows the full Shiny app interface and the default settings. The left sidebar contains all interactive controls, including the wind‐speed range slider, wind sector filter, checkbox for showing points on the time series, the choice between linear and loess trend models, and the selectors for the two wind sectors used in the t test. On the right, the app displays the wind rose, wind direction frequency plot, wind speed time series, wind speed histogram, footprint‐style plot, and three summary tables (Table 1–3). This layout means that users can get an overview of the wind data, its directional structure, temporal variation, and statistical tests on a single page, which is the main design goal of the app.
+
+[![Figure 1. Overview of the ENV405 wind analysis Shiny app interface, showing the file upload, wind speed range slider, wind sector filter, time-series options, trend model selector, download button and all default plots displayed on the main panel.](fig/Figure%201.png){fig-align="center"}](git@github.com:Neohouqing/Final-ENV405Assignment.git)
+
+The directional structure of the wind field is summarised by the wind rose (Figure 2) and the wind direction frequency bar plot (Figure 3) under the default settings (wind speed 0–20 m/s, all sectors). The wind rose shows that the most frequent sectors are South (S) and South–West (SW), followed by West (W), while North (N) and North–East (NE) occur less often. This pattern is quantified in the frequency table (Table 2): the relative frequency is about 24.40% for S, 18.40% for SW and 14.90% for W, but only 12.20% and 6.80% for N and NE. This indicates that the site is dominated by southerly and south–westerly winds during the observation period, while northerly winds are comparatively rare. Figure 3 visualises the percentages in Table 2 as bars, making the contrast between the tall bars for S and SW and the shorter bars for NE and NW very clear. This is useful in teaching when we want students to quickly identify the dominant wind directions.
+
+![Figure 2. Wind rose for the full dataset, summarising the joint distribution of wind speed and wind direction sectors; bar length indicates frequency and colour indicates wind speed classes.](fig/Figure_2.png){fig-align="center"}
+
+**Table 1 Wind speed statistics**
+
+|     n | mean_ws | median_ws | min_ws | max_ws | sd_ws |
+|------:|--------:|----------:|-------:|-------:|------:|
+| 64724 |    4.49 |      4.10 |   0.00 |  19.60 |  2.40 |
+
+**Table 2 Wind direction frequency table**
+
+| direction_sector | count | total | rel_freq | rel_freq_percent |
+|:-----------------|------:|------:|---------:|-----------------:|
+| N                |  7884 | 64724 |     0.12 |            12.20 |
+| NE               |  4401 | 64724 |     0.07 |             6.80 |
+| E                |  4719 | 64724 |     0.07 |             7.30 |
+| SE               |  4789 | 64724 |     0.07 |             7.40 |
+| S                | 15798 | 64724 |     0.24 |            24.40 |
+| SW               | 11920 | 64724 |     0.18 |            18.40 |
+| W                |  9643 | 64724 |     0.15 |            14.90 |
+| NW               |  5570 | 64724 |     0.09 |             8.60 |
+
+![Figure 3. Bar plot of wind direction frequency under the default settings, showing the relative percentage of observations in each direction sector (N, NE, E, SE, S, SW, W, NW).](fig/Figure%203.png){fig-align="center"}
+
+The overall distribution and typical strength of wind speed are described by the wind speed time series (Figure 4), the wind speed histogram (Figure 5), and the global statistics table (Table 1). The time series in Figure 4 shows strong variations between 0 and 20 m/s from 1997 to 2004. High wind events above 15 m/s are relatively rare but appear throughout the whole period, without being confined to a single year. The histogram (Figure 5) has a single peak and a right–skewed shape: most observations lie between 2 and 6 m/s, and the tail above 10 m/s becomes gradually thinner. Table 1 gives the corresponding numerical summary: the sample size is 64,724; the mean wind speed is 4.49 m/s; the median is 4.10 m/s; the minimum is 0 m/s; the maximum is 19.60 m/s; and the standard deviation is 2.40 m/s. Taken together, these results suggest that the typical wind regime is of moderate strength, with a background of persistent low–to–medium wind speeds and occasional strong winds, and no obvious extreme high–wind anomaly.
+
+![Figure 4. Wind speed time-series plot for all observations, displaying individual measurements through time to highlight short-term variability and data density.](fig/Figure%204.png){fig-align="center"}
+
+![Figure 5. Histogram of wind speed for the full dataset, illustrating the overall distribution of wind speeds and the right-skewed shape with most values between about 2 and 7 m/s.](fig/Figure%205.png){fig-align="center"}
+
+From a dispersion point of view, the footprint‐style plot (Figure 6) shows the “simple footprint” under the default data. The x-axis is the cross–wind distance, the y-axis is the along–wind distance, and the colour scale represents the estimated relative contribution density. Figure 6 shows that the highest contribution is concentrated close to the source in the downwind direction (within about 1–3 arbitrary units along the wind and 2–5 units in the cross–wind direction), and then spreads outward as a fan. This “high contribution near the source, gradual dilution further away” pattern is consistent with classical footprint model results: areas closer to the sensor and aligned with the main downwind direction contribute most to the measured flux. Under the default conditions, this indicates that the local wind structure creates a compact main contribution area, which is useful when discussing how representative the flux measurements are for the surrounding surface.
+
+![Figure 6. Default footprint-style plot based on the full dataset, showing a simple bivariate density of along-wind and cross-wind distance in arbitrary units.](fig/Figure%206.png){fig-align="center"}
+
+The Shiny app also allows comparison of mean wind speeds between different sectors. Table 3 reports the sample size, mean wind speed, and standard deviation for each sector. S and SW have the highest mean speeds, about 5.53 m/s and 5.57 m/s, whereas N and NW have lower mean speeds, about 3.28 m/s and 3.16 m/s. This directional difference is formally tested using a Welch two–sample t test (Figure 7). Under the default setting, Group A is N and Group B is S. The test returns a t statistic of about −82.18, degrees of freedom around 21,780, and a p-value smaller than 2.2×10⁻¹⁶. The 95% confidence interval for the difference in means does not include zero. Together with the sample means in Table 3 (3.28 m/s for N and 5.53 m/s for S), this leads to a clear conclusion: during the study period, the mean wind speed from the south is significantly higher than from the north, and the difference is both statistically and climatologically important. This shows that direction affects not only how often the wind blows (Table 2) but also how strong it is on average (Table 3), which matters for both wind–energy potential and dispersion risk assessment.
+
+![Figure 7. Welch two-sample t-test output comparing mean wind speeds between two selected wind sectors (Group A and Group B) under the default sector choices.](fig/Figure%207.png){fig-align="center"}
+
+**Table 3 Sector means and t-test**
+
+| direction_sector |     n | mean_ws | sd_ws |
+|:-----------------|------:|--------:|------:|
+| N                |  7884 |    3.28 |  1.67 |
+| NE               |  4401 |    4.11 |  1.84 |
+| E                |  4719 |    3.87 |  1.67 |
+| SE               |  4789 |    4.20 |  2.01 |
+| S                | 15798 |    5.53 |  2.49 |
+| SW               | 11920 |    5.57 |  2.75 |
+| W                |  9643 |    3.82 |  2.01 |
+| NW               |  5570 |    3.16 |  1.71 |
+
+Temporal trends are analysed with the trend model options in the app. Figure 8 shows the default case with all sectors and a linear model. The fitted line is almost flat, and its slope is extremely close to zero. Although the p-value of the slope is near zero because of the very large sample size, the coefficient of determination r² is only about 0.002. This means that the linear trend explains very little of the variation; most of the variability comes from short–term and seasonal changes rather than a long-term monotonic increase or decrease. In other words, over 1997–2004 the wind speed at this site appears relatively stable when viewed at the long-term scale.
+
+![Figure 8. Linear trend analysis of wind speed over time, with a fitted regression line superimposed on the time-series points and the corresponding model statistics reported in the app.](fig/Figure%208.png){fig-align="center"}
+
+Figures 9–11 then illustrate what happens when the user changes the filter settings, showing how the interactive analysis can reveal more detailed patterns. Figure 9 presents an example configuration: the wind sector is filtered to NE, the trend model is switched from Linear to Loess, and the time–series points remain visible. Under this configuration, the loess trend in Figure 10 bends upwards and then downwards. NE wind speeds increase during the first part of the period, reach a local maximum in the middle years, and then slowly decline. This pattern is hidden in the overall data (Figure 8), where the effects of different sectors are averaged together. It only emerges after filtering by sector. This suggests that different directional subsets may have very different temporal behaviours, and that the combination of filtering and model choice in the Shiny app makes such direction-specific trend analysis straightforward.
+
+![Figure 9. Screenshot of the control panel after changing the filters to “NE” wind sector, enabling point display, and switching the trend model from “Linear” to “Loess”.](fig/Figure%209.png){fig-align="center"}
+
+![Figure 10. Loess-smoothed trend of wind speed over time for the NE sector only, corresponding to the settings in Figure 9 and revealing a non-linear temporal pattern.](fig/Figure%2010.png)
+
+![Figure 11. Footprint-style plot recomputed under the adjusted settings (Figure 9), illustrating how the spatial density pattern of along-wind and cross-wind distance changes after filtering the data.](fig/Figure%2011.png){fig-align="center"}
+
+Changing the filters also affects the footprint shape. Compared with the default footprint (Figure 6), the footprint under NE–only conditions (Figure 11) shows a slightly shifted and more elongated high–contribution area with a more concentrated colour pattern. This suggests that, under NE winds, turbulent transport is focused along a narrower transport corridor with weaker lateral spread, whereas the mixed–sector footprint in Figure 6 is wider and more fan–shaped. By comparing Figures 6 and 11, users can directly see how conditioning on a single sector changes the footprint geometry. This is important for understanding how the representativeness of flux measurements depends on wind direction.
+
+Finally, the three summary tables work together with the interactive filters as a bridge between visualisation and numerical analysis. Table 1 reports the global wind speed statistics under the current filter settings; Table 2 shows the frequency distribution of wind directions; and Table 3 supports comparisons of sector–specific means and the t test. The filter summary text (visible in Figure 1) reports the number of rows after filtering and the current wind‐speed range and sector, so the user always knows which subset of the data they are analysing. Overall, the Shiny app not only reproduces a standard set of wind analysis plots (Figures 2–6, 8, 10–11), but also embeds statistical inference (t tests and trend fitting) inside an interactive interface. This allows the full cycle of “display results – detect patterns – test hypotheses” to be completed directly in a web browser.
+
+## Conclusion
+
+This study developed an interactive Shiny app to explore the ENV405 wind speed and wind direction dataset in a systematic way. Combining the wind rose, wind direction frequency bar plot and frequency table, the app shows that during the study period winds mainly came from the south, southwest and west, while north and northwest winds were less frequent. The wind speed histogram and descriptive statistics indicate that most wind speeds fall between 3–6 m/s with a right-skewed distribution; very high wind speeds occur but are rare. Sector-wise means and Welch two-sample t-tests reveal significant differences in mean wind speed among direction sectors: the south and southwest sectors have the highest mean speeds, whereas the north and northwest sectors are clearly lower, indicating strong directional heterogeneity in the wind field. Time-series and trend analyses suggest that for the full 1997–2004 period the linear trend slope is close to zero with a very small R², so there is no strong evidence for a monotonic change in wind speed; however, when users filter to specific sectors and switch to a loess model, they can observe non-linear patterns such as “increase then decrease” in selected subsets. Overall, the Shiny app not only visualizes the main statistical features and directional differences of wind speed and direction, but also demonstrates how choices of data subset and model (filters, trend options and t-tests) directly affect statistical conclusions, providing a flexible and useful platform for exploratory analysis and teaching of environmental data.
+
+## AI disclosure
+
+In this study, I used ChatGPT in a limited and supporting way. First, during the Shiny App design stage, I had already decided to implement shared filters, time–series analysis, wind–direction frequency statistics, and two–sample t-tests. I then discussed these ideas with ChatGPT to confirm that the overall analysis plan was technically feasible and to check whether my implementation had obvious problems or redundancy. I also consulted some of its generic code examples when reviewing my own scripts. Based on this, I repeatedly modified and refactored the code structure myself, including building the `reactive()` structure, integrating the filtering logic, adjusting the appearance of the plots, and deciding how to display the t-test and trend–model results in the interface. A few specific code fragments (for example, some `ggplot2` calls and the combined use of `renderTable()` and `downloadHandler()`) were adapted and simplified after I had already written an initial version, but the overall functionality design and final implementation were planned and decided by me.
+
+For data analysis and debugging, I mainly relied on the R programming and statistical skills learned in ENV405. I iteratively ran the code, examined error messages, compared console outputs with the Shiny plots, and checked back against the raw data and course materials when results looked suspicious. ChatGPT’s main role here was linguistic: it helped me polish the wording of some Git commit messages so that they read more clearly in English, and it provided light language editing for parts of the Quarto report after I had written the first draft. All statistical interpretations, figure descriptions, and final conclusions were written and checked by me; AI only offered limited assistance for confirming ideas and improving the clarity of my written English.
